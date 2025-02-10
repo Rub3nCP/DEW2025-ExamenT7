@@ -1,30 +1,85 @@
-<script>
-import NameInput from '../src/components/NameInput.vue';
-import CountryCodes from '../src/components/CountryCodes.vue';
-import SelectedCountries from '../src/components/SelectedCountries.vue';
-import CountryData from '../src/components/CountryData.vue';
-import ChartOptions from '../src/components/CharOptions.vue';
-import ChartDisplay from '../src/components/ChartDisplay.vue';
+<script setup>
+import { ref, onMounted, computed, reactive } from "vue";
+import codes from "./data/codes.json";
+import GoogleChart from "./components/GoogleChart.vue";
+import CountryData from "./components/CountryData.vue";
 
-export default {
-  components: {
-    NameInput,
-    CountryCodes,
-    SelectedCountries,
-    CountryData,
-    ChartOptions,
-    ChartDisplay,
-  },
-  data() {
-    return {
-      countryNames: [],
-      chartData: null,
-    };
-  },
-  created() {
-    this.chartData = {}; 
-  }
+const name = ref("");
+const selectedCountries = ref([]); 
+const selectedCountriesData = reactive({});
+const countryNames = ref({});
+
+const lastSelectedCountry = ref(null);
+
+const chartMode = ref("population");
+
+const chartModes = {
+  population: "Población",
+  pib: "PIB",
+  area: "Área",
+  income: "Renta",
 };
+
+onMounted(async () => {
+  try {
+    const res = await fetch("http://localhost:3000/api/names");
+    countryNames.value = await res.json();
+  } catch (error) {
+    console.error("Error cargando los nombres de los países:", error);
+  }
+});
+
+function getCountryName(code) {
+  return countryNames.value[code] || code;
+}
+
+async function selectCountry(code) {
+  if (selectedCountries.value.includes(code)) return; 
+  selectedCountries.value.push(code);
+
+  try {
+    const res = await fetch(`http://localhost:3000/api/country/${code}`);
+    if (!res.ok) {
+      throw new Error(`País no encontrado: ${code}`);
+    }
+    
+    lastSelectedCountry.value = await res.json();
+    selectedCountriesData[code] = lastSelectedCountry.value; 
+  } catch (error) {
+    console.error("Error al cargar datos del país:", error);
+  }
+}
+
+function unselectCountry(code) {
+  const index = selectedCountries.value.indexOf(code);
+  if (index !== -1) {
+    selectedCountries.value.splice(index, 1); 
+  }
+  delete selectedCountriesData[code];
+  if (lastSelectedCountry.value && lastSelectedCountry.value.code === code) {
+    lastSelectedCountry.value = null;
+  }
+}
+
+const sortedSelectedCountries = computed(() => {
+  return selectedCountries.value.slice().sort((a, b) => {
+    const nameA = getCountryName(a).toUpperCase();
+    const nameB = getCountryName(b).toUpperCase();
+    return nameA.localeCompare(nameB);
+  });
+});
+
+const chartCountries = computed(() => {
+  const result =  [
+    ["país", chartModes[chartMode.value]],
+    ...sortedSelectedCountries.value.map((code) => {
+      const country = countryNames.value[code] || code;
+      const data = selectedCountriesData[code];
+      return [country, data ? data[chartMode.value] : 0];
+    }),
+  ];
+  return result;
+});
 </script>
 
 <template>
@@ -33,26 +88,50 @@ export default {
       <h1>Datos mundiales</h1>
     </div>
     <div class="name">
-      <NameInput />
+      <label for="name">Inserta tu nombre:</label>
+      <input type="text" v-model="name" id="name" />
+      <p v-if="name.length > 0">
+        Tu nombre <b>{{ name }}</b> tiene <b>{{ name.length }} letras</b>
+      </p>
     </div>
     <div class="div-codes">
-      <CountryCodes />
+      <h2>Códigos de países</h2>
+      <ul>
+        <li v-for="code in codes" :key="code.code" @click="selectCountry(code)">
+          {{ getCountryName(code) }}
+        </li>
+      </ul>
     </div>
     <div class="selected">
-      <SelectedCountries :countryNames="countryNames" />
+      <h2>Países seleccionados ({{ selectedCountries.length }})</h2>
+      <p v-if="selectedCountries.length === 0">
+        Debes seleccionar algún país en el panel de códigos.
+      </p>
+      <ul>
+        <li v-for="code in sortedSelectedCountries" :key="code">
+          <span>{{ getCountryName(code) }}</span>
+          <button type="button" @click="unselectCountry(code)">Desmarcar</button>
+        </li>
+      </ul>
     </div>
     <div class="country-data">
-      <CountryData />
-      <ChartDisplay :chartData="chartData" />
+      <CountryData :data="lastSelectedCountry" @remove-country="removeCountry" />
     </div>
     <div class="options">
-      <ChartOptions />
+      <h2>Opciones de gráfico</h2>
+      <div>
+        <label v-for="(label, mode) in chartModes" :key="mode">
+          <input type="radio" :value="mode" v-model="chartMode" />
+          {{ label }}
+        </label>
+      </div>
     </div>
     <div class="chart">
-      <ChartDisplay />
+      <GoogleChart :data="chartCountries" />
     </div>
   </div>
 </template>
+
 
 <style scoped>
 .parent {
@@ -72,10 +151,6 @@ export default {
 
 .header h1 {
   margin: 2px;
-}
-
-.body {
-  color: black;
 }
 
 .div-codes {
@@ -117,7 +192,7 @@ ul li {
 
 ul li:hover {
   font-weight: bold;
-  cursor: pointer
+  cursor: pointer;
 }
 
 ul li button {
@@ -129,4 +204,3 @@ h2 {
   font-size: 1.2rem;
 }
 </style>
-

@@ -1,20 +1,35 @@
+<script setup>
+const props = defineProps({
+  data: Object,
+});
+
+defineEmits(["remove-country"]);
+</script>
+
 <template>
-  <div>
-    <h2>Datos del país</h2>
-    <p v-if="!country">Selecciona un país para ver los datos</p>
-    <div v-if="country">
-      <p>Población: {{ country.population }}</p>
-      <p>PIB: {{ country.pib }}</p>
-      <p v-if="country.income">PIB per cápita: <span :style="{ color: country.pib / country.population > country.income ? 'red' : 'black' }">{{ (country.pib / country.population).toFixed(2) }}</span></p>
-      <button @click="$emit('delete', country.code)">Eliminar</button>
+  <template v-if="data">
+    <div class="container">
+      <span> <b>Nombre:</b> {{ data.name }} </span>
+      <span> <b>Población:</b> {{ data.population }} millones </span>
+      <span> <b>PIB:</b> {{ data.pib }} millones </span>
+      <span> <b>Área:</b> {{ data.area }} km<sup>2</sup></span>
+      <span> <b>Renta:</b> {{ data.income }} </span>
+      <span>
+        <b>PIB/Habitante</b> {{ (data.pib / data.population).toFixed(2) }}
+      </span>
     </div>
+    <button @click="$emit('remove-country', data.code)">Eliminar</button>
+  </template>
+
+  <div v-else>
+    <b>No hay datos que mostrar</b>
   </div>
 </template>
 
-<script>
-export default {
-  props: {
-    country: Object,
-  },
-};
-</script>
+<style scoped>
+.container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+</style>
